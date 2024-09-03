@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+    <style>
+        #loadingIndicator {
+            display: none;
+            font-size: 1.2em;
+            color: #007bff;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="file" accept=".tif,.tiff" />
+        <button type="submit">Upload and Predict</button>
+    </form>
+    
+    <div id="loadingIndicator">Processing, please wait...</div>
+    <div id="resultContainer">
+        <h2>Prediction Results:</h2>
+        <div id="resultContent"></div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const uploadResponse = await fetch('http://localhost:4000/api/predict', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (uploadResponse.ok) {
+                const result = await uploadResponse.json();
+                document.getElementById('loadingIndicator').style.display = 'block';
+                
+                // Poll for the result
+                pollForResult(result.polling_url);
+            } else {
+                document.getElementById('resultContent').innerHTML = 'Failed to get prediction. Please try again.';
+            }
+        });
+
+        async function pollForResult(url) {
+            const interval = 5000; // Poll every 5 seconds
+            const maxRetries = 12; // Max retries (e.g., 1 minute max wait)
+            let retries = 0;
+
+            while (retries < maxRetries) {
+                const response = await fetch(url);
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.data) {
+                        displayResults(result.data);
+                        document.getElementById('loadingIndicator').style.display = 'none';
+                        return;
+                    }
+                }
+                retries++;
+                await new Promise(resolve => setTimeout(resolve, interval));
+            }
+            document.getElementById('resultContent').innerHTML = 'Failed to get prediction. Please try again later.';
+            document.getElementById('loadingIndicator').style.display = 'none';
+        }
+
+        function displayResults(result) {
+            const resultContainer = document.getElementById('resultContent');
+            resultContainer.innerHTML = ''; // Clear any existing content
+
+            result.forEach(item => {
+                const img = document.createElement('img');
+                img.src = item.url;
+                img.alt = item.orig_name;
+                img.style.maxWidth = '100%'; // Adjust as needed
+                img.style.margin = '10px 0';
+
+                resultContainer.appendChild(img);
+            });
+        }
+    </script>
+</body>
+</html>
